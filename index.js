@@ -22,6 +22,7 @@ const _ = require('lodash')
 const spawn = require('child_process').spawn
 
 const core_voltage_command = '/opt/vc/bin/vcgencmd measure_volts core'
+const throttled_command = '/opt/vc/bin/vcgencmd get_throttled'
 const gpu_temp_command = '/opt/vc/bin/vcgencmd measure_temp'
 const cpu_temp_command = 'cat /sys/class/thermal/thermal_zone0/temp'
 const cpu_util_mpstat_command = 'S_TIME_FORMAT=\'ISO\' mpstat -P ALL\|grep \\\:\|grep -v \\\%'
@@ -40,6 +41,11 @@ module.exports = function(app) {
     type: "object",
     description: "The user running node server must be in the video group to get GPU temperature. sysstat must be installed to activate mpstat",
     properties: {
+      path_throttled: {
+        title: "SignalK Path for System Status (https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md)",
+        type: "string",
+        default: "environment.rpi.throttled",
+      },
       path_core_voltage: {
         title: "SignalK Path for Core Voltage (V)",
         type: "string",
@@ -86,11 +92,40 @@ module.exports = function(app) {
       getGpuTemperature()
       getCpuTemperature()
       getCoreVoltage()
+      getThrottled()
       getCpuUtil()
       getMemUtil()
       getSdUtil()
     }
 
+    function getThrottled() {
+      var throttled = spawn('sh', ['-c', throttled_command ])
+
+      throttled.stdout.on('data', (data) => {
+        debug(`got throttled  ${data}`)
+        var throttled_data = data.toString().split('=')[1].split('\n')[0]
+        debug(`throttled is ${throttled_data}`)
+
+        app.handleMessage(plugin.id, {
+          updates: [
+            {
+              values: [ {
+                path: options.path_throttled,
+                value: String(throttled_data)
+              }]
+            }
+          ]
+        })
+      })
+
+      throttled.on('error', (error) => {
+        console.error(error.toString())
+      })
+
+      throttled.on('data', function (data) {
+        console.error(data.toString())
+      })
+    }
     function getCoreVoltage() {
       var corevolts = spawn('sh', ['-c', core_voltage_command ])
 
