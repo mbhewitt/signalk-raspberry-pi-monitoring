@@ -91,7 +91,7 @@ module.exports = function(app) {
       getSdUtil()
     }
 
-    function getCoreVoltage) {
+    function getCoreVoltage() {
       var corevolts = spawn('sh', ['-c', core_voltage_command ])
 
       corevolts.stdout.on('data', (data) => {
