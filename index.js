@@ -90,7 +90,7 @@ module.exports = function(app) {
 
     function updateEnv() {
       getGpuTemperature()
-      getCpuTemperature()
+//      getCpuTemperature()
       getCoreVoltage()
       getThrottled()
       getCpuUtil()
@@ -103,19 +103,20 @@ module.exports = function(app) {
 
       throttled.stdout.on('data', (data) => {
         debug(`got throttled  ${data}`)
-        var throttled_data = data.toString().split('=')[1].split('\n')[0]
+        var throttled_data = data.toString().split('=')[1].split('\n')[0].slice(-1)
         debug(`throttled is ${throttled_data}`)
-
-        app.handleMessage(plugin.id, {
-          updates: [
-            {
-              values: [ {
-                path: options.path_throttled,
-                value: String(throttled_data)
-              }]
-            }
-          ]
-        })
+        if(throttled_data!="0"){
+          app.handleMessage(plugin.id, {
+            updates: [
+              {
+                values: [ {
+                  path: options.path_throttled,
+                  value: String(throttled_data)
+                }]
+              }
+            ]
+          })
+       }
       })
 
       throttled.on('error', (error) => {
@@ -225,7 +226,7 @@ module.exports = function(app) {
             var spl_line = cpu_util_line.replace(/ +/g, ' ').split(' ')
             var re2 = /^[0-9]?$/
             if (spl_line[1].match(re2)){
-              debug(`cpu utilisation core ${spl_line[1]} is ${spl_line[11]}`)
+/*              debug(`cpu utilisation core ${spl_line[1]} is ${spl_line[11]}`)
               var pathArray = options.path_cpu_util.toString().split('\.')
               var newPath = pathArray[0] + "."
               for (i=1; i < (pathArray.length - 1); i++) {
@@ -244,7 +245,7 @@ module.exports = function(app) {
                   }
                 ]
               })
-            }
+ */           }
             else {
               debug(`cpu utilisation is ${spl_line[11]}`)
               cpu_util_all = ((100 - Number(spl_line[11]))/100).toFixed(2)
