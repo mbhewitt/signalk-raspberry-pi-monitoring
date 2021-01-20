@@ -2,6 +2,8 @@
  *  Copyright 2018 Nikolay Mostovoy <mostovoy.nikolay@gmail.com>
  * ( This plugin is a modified version of signalk-raspberry-pi-temperature - Copyright 2018 Scott Bender <scott@scottbender.net> )
  *
+ * (updated with cpu voltage by Matthew Hewitt)
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,28 +17,34 @@
  * limitations under the License.
  */
 
-const debug = require('debug')('signalk-raspberry-pi-monitoring')
+const debug = require('debug')('signalk-raspberry-pi-monitoring2')
 const _ = require('lodash')
 const spawn = require('child_process').spawn
 
-const gpu_temp_command = 'sudo /opt/vc/bin/vcgencmd measure_temp'
-const cpu_temp_command = 'sudo cat /sys/class/thermal/thermal_zone0/temp'
-const cpu_util_mpstat_command = 'sudo mpstat -P ALL\|grep \\\:\|grep -v \\\%'
-const mem_util_command = 'sudo free'
+const core_voltage_command = '/opt/vc/bin/vcgencmd measure_volts core'
+const gpu_temp_command = '/opt/vc/bin/vcgencmd measure_temp'
+const cpu_temp_command = 'cat /sys/class/thermal/thermal_zone0/temp'
+const cpu_util_mpstat_command = 'S_TIME_FORMAT=\'ISO\' mpstat -P ALL\|grep \\\:\|grep -v \\\%'
+const mem_util_command = 'free'
 const sd_util_command = 'df \/\|grep -v Used\|awk \'\{print \$5\}\'\|awk \'gsub\(\"\%\"\,\"\"\)\''
 
 module.exports = function(app) {
   var plugin = {};
   var timer
 
-  plugin.id = "signalk-raspberry-pi-monitoring"
-  plugin.name = "Raspberry PI Monitoring"
+  plugin.id = "signalk-raspberry-pi-monitoring2"
+  plugin.name = "Raspberry PI Monitoring2"
   plugin.description = "Signal K Node Server Plugin for Raspberry PI monitoring"
 
   plugin.schema = {
     type: "object",
-    description: "The user running node server must have permission to sudo without needing a password",
+    description: "The user running node server must be in the video group to get GPU temperature. sysstat must be installed to activate mpstat",
     properties: {
+      path_core_voltage: {
+        title: "SignalK Path for Core Voltage (V)",
+        type: "string",
+        default: "environment.rpi.core.voltage",
+      },
       path_cpu_temp: {
         title: "SignalK Path for CPU temperature (K)",
         type: "string",
@@ -77,9 +85,39 @@ module.exports = function(app) {
     function updateEnv() {
       getGpuTemperature()
       getCpuTemperature()
+      getCoreVoltage()
       getCpuUtil()
       getMemUtil()
       getSdUtil()
+    }
+
+    function getCoreVoltage) {
+      var corevolts = spawn('sh', ['-c', core_voltage_command ])
+
+      corevolts.stdout.on('data', (data) => {
+        debug(`got coreVolts  ${data}`)
+        var core_volts = (Number(data.toString().split('=')[1].split('V')[0]) ).toFixed(4)
+        debug(`core voltage is ${core_volts}`)
+
+        app.handleMessage(plugin.id, {
+          updates: [
+            {
+              values: [ {
+                path: options.path_core_voltage,
+                value: Number(core_volts)
+              }]
+            }
+          ]
+        })
+      })
+
+      corevolts.on('error', (error) => {
+        console.error(error.toString())
+      })
+
+      corevolts.on('data', function (data) {
+        console.error(data.toString())
+      })
     }
 
     function getGpuTemperature() {
