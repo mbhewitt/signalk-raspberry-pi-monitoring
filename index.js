@@ -105,7 +105,7 @@ module.exports = function(app) {
         debug(`got throttled  ${data}`)
         var throttled_data = data.toString().split('=')[1].split('\n')[0].slice(-1)
         debug(`throttled is ${throttled_data}`)
-        if(throttled_data!="0"){
+        if(throttled_data!=""){
           app.handleMessage(plugin.id, {
             updates: [
               {
