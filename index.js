@@ -28,6 +28,8 @@ const cpu_temp_command = 'cat /sys/class/thermal/thermal_zone0/temp'
 const cpu_util_mpstat_command = 'S_TIME_FORMAT=\'ISO\' mpstat -P ALL\|grep \\\:\|grep -v \\\%'
 const mem_util_command = 'free'
 const sd_util_command = 'df \/\|grep -v Used\|awk \'\{print \$5\}\'\|awk \'gsub\(\"\%\"\,\"\"\)\''
+const num_cpu_command = 'grep \'model name\' /proc/cpuinfo \| wc -l'
+const one_min_load_command = 'uptime\|grep \"load average\"\|awk -F: \'\{print \$5\}\'\|awk -F, \'\{print \$1\}\''
 
 module.exports = function(app) {
   var plugin = {};
@@ -45,6 +47,11 @@ module.exports = function(app) {
         title: "SignalK Path for System Status (https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md)",
         type: "string",
         default: "environment.rpi.throttled",
+      },
+      path_load_average: {
+        title: "SignalK Path for one minute Load Average (scaled by cpus)",
+        type: "string",
+        default: "environment.rpi.load_average",
       },
       path_core_voltage: {
         title: "SignalK Path for Core Voltage (V)",
@@ -93,11 +100,56 @@ module.exports = function(app) {
 //      getCpuTemperature()
       getCoreVoltage()
       getThrottled()
+      getLoadAverage()
       getCpuUtil()
       getMemUtil()
       getSdUtil()
     }
 
+    function getLoadAverage() {
+      var cpus = spawn('sh', ['-c', num_cpu_command ])
+      var la = spawn('sh', ['-c', one_min_load_command ])
+
+      var cpu_num=1
+      cpus.stdout.on('data', (data) => {
+        cpu_num = Number(data.toString().trim())
+        if(!(cpu_num>0)){
+          cpu_num=1
+        }
+      })
+      debug(`got cpuNum  ${cpu_num}`)
+      la.stdout.on('data', (data_la) => {
+        var la_num = data_la.toString().trim()
+        debug(`got LA  ${la_num}`)
+        var util=Number(la_num)/cpu_num
+          
+        app.handleMessage(plugin.id, {
+          updates: [
+            {
+              values: [ {
+                path: options.path_load_average,
+                value: Number(util)
+              }]
+            }
+          ]
+        })
+      })
+
+      cpus.on('error', (error) => {
+        console.error(error.toString())
+      })
+
+      cpus.on('data', function (data) {
+        console.error(data.toString())
+      })
+      la.on('error', (error) => {
+        console.error(error.toString())
+      })
+
+      la.on('data', function (data_la) {
+        console.error(data.toString())
+      })
+    }
     function getThrottled() {
       var throttled = spawn('sh', ['-c', throttled_command ])
 
