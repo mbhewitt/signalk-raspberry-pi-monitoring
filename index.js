@@ -21,6 +21,7 @@ const debug = require('debug')('signalk-raspberry-pi-monitoring2')
 const _ = require('lodash')
 const spawn = require('child_process').spawn
 
+const bat_voltage_command = '/usr/sbin/mopicli -v|awk \'\{print \$4\}\''
 const core_voltage_command = '/opt/vc/bin/vcgencmd measure_volts core'
 const throttled_command = '/opt/vc/bin/vcgencmd get_throttled'
 const gpu_temp_command = '/opt/vc/bin/vcgencmd measure_temp'
@@ -57,6 +58,11 @@ module.exports = function(app) {
         title: "SignalK Path for Core Voltage (V)",
         type: "string",
         default: "environment.rpi.core.voltage",
+      },
+      path_bat_voltage: {
+        title: "SignalK Path for MoPi Bat Voltage (V)",
+        type: "string",
+        default: "environment.rpi.bat.voltage",
       },
       path_cpu_temp: {
         title: "SignalK Path for CPU temperature (K)",
@@ -99,6 +105,7 @@ module.exports = function(app) {
       getGpuTemperature()
 //      getCpuTemperature()
       getCoreVoltage()
+      getBatVoltage()
       getThrottled()
       getLoadAverage()
       getCpuUtil()
@@ -204,6 +211,34 @@ module.exports = function(app) {
       })
 
       corevolts.on('data', function (data) {
+        console.error(data.toString())
+      })
+    }
+    function getBatVoltage() {
+      var batvolts = spawn('sh', ['-c', bat_voltage_command ])
+
+      batvolts.stdout.on('data', (data) => {
+//        debug(`got batVolts  ${data}`)
+        var bat_volts = (Number(data.toString().trim())/1000).toFixed(5)
+        debug(`bat voltage is ${bat_volts}`)
+
+        app.handleMessage(plugin.id, {
+          updates: [
+            {
+              values: [ {
+                path: options.path_bat_voltage,
+                value: Number(bat_volts)
+              }]
+            }
+          ]
+        })
+      })
+
+      batvolts.on('error', (error) => {
+        console.error(error.toString())
+      })
+
+      batvolts.on('data', function (data) {
         console.error(data.toString())
       })
     }
